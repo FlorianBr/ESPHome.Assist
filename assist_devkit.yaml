@@ -1,0 +1,316 @@
+# Assist for Home Assistant
+# Board: ESP32_DevKitC_V4 with WROVER
+# Microphone: INMP441
+# Speaker: -TODO-
+# Input: Push-Button
+# Outputs: Single LED, LED Strip
+
+esphome:
+  name: assistbig
+  comment: Voice Assist on ESP32 DevKit
+  friendly_name: Igor Node
+  name_add_mac_suffix: true
+  min_version: 2023.10.0
+  on_boot:
+    - light.turn_off:
+        id: led_strip
+    - light.turn_on:
+        id: led_strip
+        effect: "Booting"
+
+esp32:
+  board: esp-wrover-kit
+  flash_size: 4MB
+  # framework:
+  #   type: esp-idf
+  #   version: recommended
+
+logger:
+api:
+ota:
+
+wifi:
+  ssid: !secret ssid
+  password: !secret pass
+
+web_server:
+  port: 80
+  include_internal: true
+
+
+############################ Buttons
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: 13
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    name: Push Button
+    id: button
+    # Push to talk config ...
+    on_press:
+      - voice_assistant.start:
+          silence_detection: false
+    on_release:
+      - voice_assistant.stop:
+    # ... Push to talk config
+
+############################ Lights
+
+spi:
+  mosi_pin: 23
+  clk_pin: 18
+
+light:
+  - platform: spi_led_strip
+    num_leds: 32
+    id: led_strip
+    name: "RGB LED Strip"
+    data_rate: 200kHz
+    effects:
+      - addressable_color_wipe:
+          name: "Booting"
+          colors:
+            - red: 50%
+              green: 0%
+              blue: 0%
+              num_leds: 1
+            - red: 0%
+              green: 0%
+              blue: 0%
+              num_leds: 7
+          add_led_interval: 125ms
+          reverse: false
+      - addressable_color_wipe:
+          name: "Listening"
+          colors:
+            - red: 0%
+              green: 0%
+              blue: 0%
+              num_leds: 1
+            - red: 0%
+              green: 100%
+              blue: 0%
+              num_leds: 2
+              gradient: true
+            - red: 0%
+              green: 100%
+              blue: 0%
+              num_leds: 1
+            - red: 0%
+              green: 100%
+              blue: 0%
+              num_leds: 2
+              gradient: true
+            - red: 0%
+              green: 0%
+              blue: 0%
+              num_leds: 10
+          add_led_interval: 50ms
+          reverse: false
+      - pulse:
+          name: "Fast Pulse"
+          transition_length: 250ms
+          update_interval: 250ms
+      - pulse:
+          name: "Slow Pulse"
+          transition_length: 500ms
+          update_interval: 500ms
+
+output:
+  - platform: ledc
+    pin: GPIO14
+    id: led_out
+
+############################ Display
+
+font:
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: thin
+    id: roboto_font
+    size: 12
+
+image:
+  - file: mdi:ear-hearing
+    id: pic_listening
+    resize: 64x64
+  - file: mdi:brain
+    id: pic_thinking
+    resize: 64x64
+  - file: mdi:account-voice
+    id: pic_answering
+    resize: 64x64
+  - file: mdi:connection
+    id: pic_connected
+    resize: 64x64
+  - file: mdi:check
+    id: pic_done
+    resize: 64x64
+  - file: mdi:bomb
+    id: pic_error
+    resize: 64x64
+  - file: mdi:sleep-off
+    id: pic_ww
+    resize: 64x64
+
+i2c:
+  sda: 21
+  scl: 22
+  frequency: 400kHz
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 128x64"
+    address: 0x3C
+    id: oled_display
+    pages:
+      - id: page_empty
+        lambda: |-
+          it.fill(COLOR_OFF);
+      - id: page_connected
+        lambda: |-
+          it.image(32, 0, id(pic_connected));
+      - id: page_listening
+        lambda: |-
+          it.image(32, 0, id(pic_listening));
+      - id: page_wakeword
+        lambda: |-
+          it.image(32, 0, id(pic_ww));
+      - id: page_thinking
+        lambda: |-
+          it.image(32, 0, id(pic_thinking));
+      - id: page_answering
+        lambda: |-
+          it.image(32, 0, id(pic_answering));
+      - id: page_end
+        lambda: |-
+          it.image(32, 0, id(pic_done));
+      - id: page_error
+        lambda: |-
+          it.image(32, 0, id(pic_error));
+
+############################ Audio
+
+i2s_audio:
+  - id: i2s_in
+    i2s_lrclk_pin: GPIO26   # INMP441 WS
+    i2s_bclk_pin: GPIO27    # INMP441 SCK
+  - id: i2s_out
+    i2s_lrclk_pin: GPIO33   # IMAX98357 LRC
+    i2s_bclk_pin: GPIO32    # MAX98357 SCK
+
+microphone:
+  platform: i2s_audio
+  id: external_microphone
+  adc_type: external
+  i2s_audio_id: i2s_in
+  i2s_din_pin: GPIO4 # INMP441 DO
+  channel: right
+  pdm: false
+
+media_player:
+  - platform: i2s_audio
+    id: media_out
+    name: Media Player
+    dac_type: external
+    i2s_audio_id: i2s_out
+    i2s_dout_pin: GPIO25 # MAX98357 DIN
+    mode: mono
+
+voice_assistant:
+  id: voice_assist
+  microphone: external_microphone
+  media_player: media_out
+  use_wake_word: false
+  noise_suppression_level: 2
+  auto_gain: 31dBFS
+  volume_multiplier: 2.5
+  on_listening:
+    - script.execute: va_listen
+  on_intent_start:
+    - script.execute: va_thinking
+  on_tts_start:
+    - script.execute: va_answering
+  on_end:
+    - script.execute: va_end
+  on_error:
+    - script.execute: va_end
+  on_wake_word_detected:
+    - script.execute: va_wakeword
+  on_client_connected:
+    - script.execute: va_connected
+
+############################ Scripts
+
+script:
+  - id: va_connected
+    then:
+      - logger.log: "-------- VA: Connected"
+      - display.page.show: page_connected
+      - component.update: oled_display
+      - delay: 1s
+      - display.page.show: page_empty
+      - light.turn_off:
+          id: led_strip
+  - id: va_listen
+    then:
+      - logger.log: "-------- VA: Listening"
+      - display.page.show: page_listening
+      - component.update: oled_display
+      - light.turn_on:
+          id: led_strip
+          effect: "Listening"
+  - id: va_wakeword
+    then:
+      - logger.log: "-------- VA: WW detected"
+      - display.page.show: page_wakeword
+      - component.update: oled_display
+  - id: va_thinking
+    then:
+      - logger.log: "-------- VA: Thinking"
+      - display.page.show: page_thinking
+      - component.update: oled_display
+      - light.turn_on:
+          id: led_strip
+          red: 0%
+          green: 100%
+          blue: 0%
+          effect: "Slow Pulse"
+  - id: va_answering
+    then:
+      - logger.log: "-------- VA: Answering"
+      - display.page.show: page_answering
+      - component.update: oled_display
+  - id: va_end
+    then:
+      - logger.log: "-------- VA: End!"
+      - wait_until:
+          not:
+            media_player.is_playing:
+      - display.page.show: page_end
+      - component.update: oled_display
+      - delay: 250ms
+      - display.page.show: page_empty
+      - light.turn_off:
+          id: led_strip
+  - id: va_error
+    then:
+      - logger.log: "-------- VA: Error"
+      - display.page.show: page_error
+      - component.update: oled_display
+      - light.turn_on:
+          id: led_strip
+          red: 100%
+          green: 0%
+          blue: 0%
+          effect: "Fast Pulse"
+      - delay: 2s
+      - display.page.show: page_empty
+      - component.update: oled_display
+      - light.turn_off:
+          id: led_strip

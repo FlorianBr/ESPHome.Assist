@@ -2,38 +2,37 @@
 
 Configuration and stuff for hardware setups for Home Assistant voice assistants.
 
-# M5 Stack Atom Echo
+## M5 Stack Atom Echo
 
-Configuration for the [Atom Echo](https://docs.m5stack.com/en/atom/atomecho) based on ESPHomes original config. A bit simplified and only using push-to-talk right now.
+Configuration for the [Atom Echo](https://docs.m5stack.com/en/atom/atomecho) based on ESPHomes original config. A bit simplified and only using push-to-talk right now. No additional hardware necessary!
 
-# M5 Stack Atom S3 Lite
+## ESP32 DevKit
 
-Currently WIP!
+A bigger variation with different components:
 
-Should be more powerful, with better sound quality. Build with these components:
+- ESP32 DevKit V4
+- INMP441 I2S Microphone
+- MAX98357 I2S Amplifier with 3W Speaker
+- LED Strip with 32 addressable LEDs
+- I2C OLED
+- Push-Button for Push-to-Talk
 
-- [AtomS3 lite](https://docs.m5stack.com/en/core/AtomS3%20Lite)
-- [Atom Speaker Unit](https://docs.m5stack.com/en/atom/atom_spk)
-- [Microphone Unit](https://docs.m5stack.com/en/unit/pdm)
-- A push external button
-- RGB LEDs
+Pinning:
 
-TODO-List:
+- GPIO4 - INMP441 SO
+- GPIO13 - Push Button
+- GPIO18 - LED Strip CLK
+- GPIO21 - OLED SDA
+- GPIO22 - OLED SCL
+- GPIO23 - LED Strip Data
+- GPIO25 - MAX98357 DIN
+- GPIO26 - INMP441 WS
+- GPIO27 - INMP441 SCK
+- GPIO32 - MAX98357 BCLK
+- GPIO33 - MAX98357 LRC
 
-- [X] Basic Setup with WiFi and HA integration
-- [X] IR LED
-- [X] RGB-LED
-- [X] External I2S speaker
-- [X] MediaPlayer
-- [?] External I2S microphone (WIP)
-- [ ] Assist pipeline
-- [ ] External Push Button
-- [ ] Assist Settings Gain, Noise, Volume
-- [ ] LED depending on Assist
-- [ ] Additional LED Strip for effects?
+Additional connections:
 
-# ESP32 NodeMCU
-
-Currently heavy WIP!
-
-Playing around with a unused NodeMCU. Maybe I will used it instead of the AtomS3, but not sure yet
+- INMP441 L/R: GND
+- MAX98357 GAIN: Not connected
+- MAX98357 SD: Bridge to VDD (Channel Left selected)
