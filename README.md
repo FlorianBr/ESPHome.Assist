@@ -19,8 +19,10 @@ A bigger variation with different components:
 
 Pinning:
 
+- GPIO2 - LED (Listening)
 - GPIO4 - INMP441 SO
 - GPIO13 - Push Button
+- GPIO15 - LED (Mute)
 - GPIO18 - LED Strip CLK
 - GPIO21 - OLED SDA
 - GPIO22 - OLED SCL
@@ -36,3 +38,10 @@ Additional connections:
 - INMP441 L/R: GND
 - MAX98357 GAIN: Not connected
 - MAX98357 SD: Bridge to VDD (Channel Left selected)
+
+TODOs:
+
+- Choose between WakeWord and push2talk with a switch
+- Mute-Button
+- Use ESP-IDF instead of Arduino
+- Port to ESP-C3

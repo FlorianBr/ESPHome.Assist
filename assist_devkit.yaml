@@ -1,29 +1,28 @@
 # Assist for Home Assistant
 # Board: ESP32_DevKitC_V4 with WROVER
 # Microphone: INMP441
-# Speaker: -TODO-
+# Speaker: MAX98357
 # Input: Push-Button
-# Outputs: Single LED, LED Strip
+# Outputs: LED Strip
 
 esphome:
   name: assistbig
   comment: Voice Assist on ESP32 DevKit
-  friendly_name: Igor Node
+  friendly_name: VA Igor
   name_add_mac_suffix: true
-  min_version: 2023.10.0
   on_boot:
-    - light.turn_off:
-        id: led_strip
-    - light.turn_on:
-        id: led_strip
-        effect: "Booting"
+    priority: -100
+    then:
+      - lambda: id(ui_phase) = ${ui_state_starting};
+      - script.execute: control_ui
 
 esp32:
   board: esp-wrover-kit
   flash_size: 4MB
-  # framework:
-  #   type: esp-idf
-  #   version: recommended
+  framework:
+    type: arduino
+    # type: esp-idf
+    # version: recommended
 
 logger:
 api:
@@ -37,8 +36,22 @@ web_server:
   port: 80
   include_internal: true
 
+globals:
+  - id: ui_phase
+    type: int
+    restore_value: no
+    initial_value: ${ui_state_starting}
 
-############################ Buttons
+substitutions:
+  ui_state_starting: '0'
+  ui_state_idle: '1'
+  ui_state_listening: '2'
+  ui_state_thinking: '4'
+  ui_state_replying: '5'
+  ui_state_error: '11'
+  ui_state_muted: '12'
+
+############################ Buttons / Switches
 
 binary_sensor:
   - platform: gpio
@@ -52,10 +65,14 @@ binary_sensor:
     id: button
     # Push to talk config ...
     on_press:
+      - lambda: id(ui_phase) = ${ui_state_listening};
       - voice_assistant.start:
           silence_detection: false
+      - script.execute: control_ui
     on_release:
+      - lambda: id(ui_phase) = ${ui_state_thinking};
       - voice_assistant.stop:
+      - script.execute: control_ui
     # ... Push to talk config
 
 ############################ Lights
@@ -72,9 +89,9 @@ light:
     data_rate: 200kHz
     effects:
       - addressable_color_wipe:
-          name: "Booting"
+          name: "Rotating Red"
           colors:
-            - red: 50%
+            - red: 20%
               green: 0%
               blue: 0%
               num_leds: 1
@@ -82,10 +99,10 @@ light:
               green: 0%
               blue: 0%
               num_leds: 7
-          add_led_interval: 125ms
+          add_led_interval: 75ms
           reverse: false
       - addressable_color_wipe:
-          name: "Listening"
+          name: "Rotating Green"
           colors:
             - red: 0%
               green: 0%
@@ -115,27 +132,43 @@ light:
           name: "Fast Pulse"
           transition_length: 250ms
           update_interval: 250ms
+          min_brightness: 0%
+          max_brightness: 50%
       - pulse:
           name: "Slow Pulse"
           transition_length: 500ms
           update_interval: 500ms
+          min_brightness: 0%
+          max_brightness: 50%
+      - pulse:
+          name: "Super Slow Pulse"
+          transition_length: 2s
+          update_interval: 2s
+          min_brightness: 0%
+          max_brightness: 50%
+  - platform: monochromatic
+    id: led_mute
+    name: "LED Mute"
+    output: led1_out
+  - platform: monochromatic
+    id: led_listening
+    name: "LED Listening"
+    output: led2_out
 
 output:
   - platform: ledc
-    pin: GPIO14
-    id: led_out
+    pin: GPIO15
+    id: led1_out
+  - platform: ledc
+    pin: GPIO2
+    id: led2_out
 
 ############################ Display
 
-font:
-  - file:
-      type: gfonts
-      family: Roboto
-      weight: thin
-    id: roboto_font
-    size: 12
-
 image:
+  - file: mdi:timer-sand
+    id: pic_starting
+    resize: 64x64
   - file: mdi:ear-hearing
     id: pic_listening
     resize: 64x64
@@ -145,17 +178,8 @@ image:
   - file: mdi:account-voice
     id: pic_answering
     resize: 64x64
-  - file: mdi:connection
-    id: pic_connected
-    resize: 64x64
-  - file: mdi:check
-    id: pic_done
-    resize: 64x64
   - file: mdi:bomb
     id: pic_error
-    resize: 64x64
-  - file: mdi:sleep-off
-    id: pic_ww
     resize: 64x64
 
 i2c:
@@ -172,24 +196,18 @@ display:
       - id: page_empty
         lambda: |-
           it.fill(COLOR_OFF);
-      - id: page_connected
+      - id: page_start
         lambda: |-
-          it.image(32, 0, id(pic_connected));
+          it.image(32, 0, id(pic_starting));
       - id: page_listening
         lambda: |-
           it.image(32, 0, id(pic_listening));
-      - id: page_wakeword
-        lambda: |-
-          it.image(32, 0, id(pic_ww));
       - id: page_thinking
         lambda: |-
           it.image(32, 0, id(pic_thinking));
       - id: page_answering
         lambda: |-
           it.image(32, 0, id(pic_answering));
-      - id: page_end
-        lambda: |-
-          it.image(32, 0, id(pic_done));
       - id: page_error
         lambda: |-
           it.image(32, 0, id(pic_error));
@@ -201,7 +219,7 @@ i2s_audio:
     i2s_lrclk_pin: GPIO26   # INMP441 WS
     i2s_bclk_pin: GPIO27    # INMP441 SCK
   - id: i2s_out
-    i2s_lrclk_pin: GPIO33   # IMAX98357 LRC
+    i2s_lrclk_pin: GPIO33   # MAX98357 LRC
     i2s_bclk_pin: GPIO32    # MAX98357 SCK
 
 microphone:
@@ -222,95 +240,72 @@ media_player:
     i2s_dout_pin: GPIO25 # MAX98357 DIN
     mode: mono
 
+############################ Voice Assistant
+
 voice_assistant:
   id: voice_assist
   microphone: external_microphone
   media_player: media_out
-  use_wake_word: false
-  noise_suppression_level: 2
+  noise_suppression_level: 4
   auto_gain: 31dBFS
-  volume_multiplier: 2.5
-  on_listening:
-    - script.execute: va_listen
-  on_intent_start:
-    - script.execute: va_thinking
+  volume_multiplier: 64.0
+  use_wake_word: false
   on_tts_start:
-    - script.execute: va_answering
+    - lambda: id(ui_phase) = ${ui_state_replying};
+    - script.execute: control_ui
   on_end:
-    - script.execute: va_end
+    - wait_until:
+        not:
+          media_player.is_playing:
+    - lambda: id(ui_phase) = ${ui_state_idle};
+    - script.execute: control_ui
   on_error:
-    - script.execute: va_end
-  on_wake_word_detected:
-    - script.execute: va_wakeword
+    - lambda: id(ui_phase) = ${ui_state_error};
+    - script.execute: control_ui
   on_client_connected:
-    - script.execute: va_connected
+    - lambda: id(ui_phase) = ${ui_state_idle};
+    - script.execute: control_ui
 
 ############################ Scripts
 
 script:
-  - id: va_connected
+  - id: control_ui
     then:
-      - logger.log: "-------- VA: Connected"
-      - display.page.show: page_connected
-      - component.update: oled_display
-      - delay: 1s
-      - display.page.show: page_empty
-      - light.turn_off:
-          id: led_strip
-  - id: va_listen
-    then:
-      - logger.log: "-------- VA: Listening"
-      - display.page.show: page_listening
-      - component.update: oled_display
-      - light.turn_on:
-          id: led_strip
-          effect: "Listening"
-  - id: va_wakeword
-    then:
-      - logger.log: "-------- VA: WW detected"
-      - display.page.show: page_wakeword
-      - component.update: oled_display
-  - id: va_thinking
-    then:
-      - logger.log: "-------- VA: Thinking"
-      - display.page.show: page_thinking
-      - component.update: oled_display
-      - light.turn_on:
-          id: led_strip
-          red: 0%
-          green: 100%
-          blue: 0%
-          effect: "Slow Pulse"
-  - id: va_answering
-    then:
-      - logger.log: "-------- VA: Answering"
-      - display.page.show: page_answering
-      - component.update: oled_display
-  - id: va_end
-    then:
-      - logger.log: "-------- VA: End!"
-      - wait_until:
-          not:
-            media_player.is_playing:
-      - display.page.show: page_end
-      - component.update: oled_display
-      - delay: 250ms
-      - display.page.show: page_empty
-      - light.turn_off:
-          id: led_strip
-  - id: va_error
-    then:
-      - logger.log: "-------- VA: Error"
-      - display.page.show: page_error
-      - component.update: oled_display
-      - light.turn_on:
-          id: led_strip
-          red: 100%
-          green: 0%
-          blue: 0%
-          effect: "Fast Pulse"
-      - delay: 2s
-      - display.page.show: page_empty
-      - component.update: oled_display
-      - light.turn_off:
-          id: led_strip
+      - lambda: |
+          switch(id(ui_phase)) {
+            default:
+            case ${ui_state_starting}:
+              id(led_strip).turn_on().set_effect("Rotating Red").perform();
+              id(oled_display).show_page(page_start);
+              id(oled_display).update();
+            break;
+            case ${ui_state_idle}:
+              id(led_strip).turn_off().perform();
+              id(oled_display).show_page(page_empty);
+              id(oled_display).update();
+            break;
+            case ${ui_state_listening}:
+              id(led_strip).turn_on().set_rgb(0, 1, 0).set_brightness(0.1).set_effect("Slow Pulse").perform();
+              id(oled_display).show_page(page_listening);
+              id(oled_display).update();
+              id(led_listening).turn_on().perform();
+            break;
+            case ${ui_state_thinking}:
+              id(led_strip).turn_on().set_brightness(0.5).set_effect("Rotating Green").perform();
+              id(oled_display).show_page(page_thinking);
+              id(oled_display).update();
+              id(led_listening).turn_off().perform();
+            break;
+            case ${ui_state_replying}:
+              id(led_strip).turn_on().set_rgb(0, 0, 1).set_brightness(0.1).set_effect("Fast Pulse").perform();
+              id(oled_display).show_page(page_answering);
+              id(oled_display).update();
+            break;
+            case ${ui_state_error}:
+              id(led_strip).turn_on().set_rgb(1, 0, 0).set_brightness(0.1).set_effect("Fast Pulse").perform();
+              id(oled_display).show_page(page_error);
+              id(oled_display).update();
+            break;
+            case ${ui_state_muted}:
+            break;
+          }
