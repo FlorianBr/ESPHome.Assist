@@ -39,9 +39,45 @@ Additional connections:
 - MAX98357 GAIN: Not connected
 - MAX98357 SD: Bridge to VDD (Channel Left selected)
 
-TODOs:
+## ESP32-S3
 
+I use a chinese clone of Espressifs ESP32-S3-DevKitC with slightly different pinning. The on-board RGB-LED is at IO48 instead of IO38 for example.
+
+Pinning:
+
+- GPIO1 - OLED SDA
+- GPIO2 - OLED SCL
+- GPIO4 - LED Strip CLK
+- GPIO5 - LED Strip CLK
+- GPIO6 - LED 1 (Mute)
+- GPIO7 - LED 2 (Listening)
+- GPIO10 - Push Button
+- GPIO19 - INMP441 SO
+- GPIO20 - INMP441 / MAX98357 WS/LRC
+- GPIO21 - INMP441 / MAX98357 SCK/BCLK
+- GPIO47 - MAX98357 DIN
+- GPIO48 - On-Board RGB-LED
+
+- INMP441 L/R: GND
+- MAX98357 GAIN: Not connected
+- MAX98357 SD: VDD (Channel Left selected)
+
+DONE:
+
+- Basic Setup with WiFi and PSRAM
+- OnBoard RGB-LED
+- Push-Button
+- LED Strip
+- LED Listening
+- LED Mute
+- OLED
+- Microphone
+- Speaker (Not working with ESP-IDF?)
+
+TODO:
+
+- I2S: 22pF against GND
+- Move to ESP-IDF
+- microWakeWord
 - Choose between WakeWord and push2talk with a switch
 - Mute-Button
-- Use ESP-IDF instead of Arduino
-- Port to ESP-C3
